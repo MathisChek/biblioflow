@@ -1,4 +1,3 @@
-// src/books/books.controller.ts
 import {
   Controller,
   Get,

@@ -1,9 +1,7 @@
-// src/books/books.service.ts - Version simplifiée en mémoire pour le TP
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateBookDto } from './dto/create-book.dto';
 import { UpdateBookDto } from './dto/update-book.dto';
 
-// Interface simple pour les livres (sans TypeORM)
 export interface Book {
   id: number;
   title: string;
