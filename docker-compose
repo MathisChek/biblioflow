@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  backend-dev:
+    build:
+      context: ./biblioflow-backend
+      target: dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - JWT_SECRET=super_secret_jwt_key_change_in_production
+      - PORT=3000
+    volumes:
+      - ./biblioflow-backend:/app
+      - /app/node_modules
+
+  backend-prod:
+    build:
+      context: ./biblioflow-backend
+      target: prod
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=production
+      - JWT_SECRET=super_secret_jwt_key_change_in_production
+      - PORT=3000
+
+  frontend-dev:
+    build:
+      context: ./biblioflow-frontend
+      target: dev
+    ports:
+      - "4200:4200"
+    volumes:
+      - ./biblioflow-frontend/src:/app/src
+      - /app/node_modules
+
+  frontend-prod:
+    build:
+      context: ./biblioflow-frontend
+      target: prod
+    ports:
+      - "8080:80"
