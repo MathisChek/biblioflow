@@ -20,11 +20,15 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-# On force le répertoire de sortie pour ne pas dépendre du nom de projet
+
+# Build Angular
 RUN npx ng build --configuration=production --output-path=/app/dist
 
 FROM nginx:alpine AS prod
-# Copie uniquement les fichiers statiques buildés
-COPY --from=builder /app/dist/ /usr/share/nginx/html/
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Copier depuis le bon dossier (browser/ pour Angular 17+)
+COPY --from=builder /app/dist/browser/ /usr/share/nginx/html/
+
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
