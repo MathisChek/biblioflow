@@ -9,6 +9,7 @@ import {
   ParseIntPipe,
   HttpCode,
   HttpStatus,
+  Query,
 } from '@nestjs/common';
 import { BooksService } from './books.service';
 import { CreateBookDto } from './dto/create-book.dto';
@@ -19,14 +20,13 @@ export class BooksController {
   constructor(private readonly booksService: BooksService) {}
 
   @Post()
-  @HttpCode(HttpStatus.CREATED)
-  create(@Body() createBookDto: CreateBookDto) {
-    return this.booksService.create(createBookDto);
+  create(@Body() dto: CreateBookDto) {
+    return this.booksService.create(dto);
   }
 
   @Get()
-  findAll() {
-    return this.booksService.findAll();
+  findAll(@Query('q') q?: string) {
+    return this.booksService.findAll(q);
   }
 
   @Get(':id')
@@ -35,11 +35,8 @@ export class BooksController {
   }
 
   @Put(':id')
-  update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() updateBookDto: UpdateBookDto,
-  ) {
-    return this.booksService.update(id, updateBookDto);
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateBookDto) {
+    return this.booksService.update(id, dto);
   }
 
   @Delete(':id')

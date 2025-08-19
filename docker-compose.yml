@@ -12,8 +12,16 @@ services:
     env_file:
       - .env
     environment:
+      - NODE_ENV=development
       - DATABASE_HOST=postgres
       - DATABASE_PORT=5432
+      - DATABASE_USER=${DATABASE_USER}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - DATABASE_NAME=${DATABASE_NAME}
+      - DATABASE_SSL=false
+      - DATABASE_SYNCHRONIZE=true
+      - DATABASE_LOGGING=true
+      - JWT_SECRET=${JWT_SECRET}
     volumes:
       - ./biblioflow-backend:/app
       - /app/node_modules
@@ -23,6 +31,11 @@ services:
     networks:
       - biblioflow-backend
       - biblioflow-frontend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   backend-prod:
     build:
@@ -38,12 +51,25 @@ services:
       - NODE_ENV=production
       - DATABASE_HOST=postgres
       - DATABASE_PORT=5432
+      - DATABASE_USER=${DATABASE_USER}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - DATABASE_NAME=${DATABASE_NAME}
+      - DATABASE_SSL=${DATABASE_SSL}
+      - DATABASE_SSL_REJECT_UNAUTHORIZED=${DATABASE_SSL_REJECT_UNAUTHORIZED}
+      - DATABASE_SYNCHRONIZE=${DATABASE_SYNCHRONIZE}
+      - DATABASE_LOGGING=${DATABASE_LOGGING}
+      - JWT_SECRET=${JWT_SECRET}
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - biblioflow-backend
       - biblioflow-frontend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   frontend-dev:
     build:
@@ -77,9 +103,9 @@ services:
     container_name: biblioflow-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DATABASE_NAME:-biblioflow_db}
+      POSTGRES_DB: ${DATABASE_NAME:-biblioflow_dev}
       POSTGRES_USER: ${DATABASE_USER:-postgres}
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-password}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-secure_password_123}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     ports:
       - "${DATABASE_PORT:-5432}:5432"
@@ -87,12 +113,34 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-postgres} -d ${DATABASE_NAME:-biblioflow_db}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-postgres} -d ${DATABASE_NAME:-biblioflow_dev}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
     networks:
       - biblioflow-backend
+
+  nginx:
+    image: nginx:alpine
+    container_name: biblioflow-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/logs:/var/log/nginx
+    depends_on:
+      - backend-prod
+      - frontend-prod
+    networks:
+      - biblioflow-frontend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/nginx-health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   postgres_data:

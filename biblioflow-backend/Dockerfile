@@ -2,6 +2,9 @@
 FROM node:22-alpine AS dev
 WORKDIR /app
 
+# Installer curl pour les healthchecks
+RUN apk add --no-cache curl
+
 # Copier les fichiers package
 COPY package*.json ./
 
@@ -35,6 +38,9 @@ RUN npm run build
 
 # ===== Stage PRODUCTION =====
 FROM node:22-alpine AS prod
+
+# Installer curl pour les healthchecks
+RUN apk add --no-cache curl
 
 # Créer un utilisateur non-root pour la sécurité
 RUN addgroup -g 1001 -S nodejs

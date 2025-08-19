@@ -1,80 +1,52 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, ILike } from 'typeorm';
+import { Book } from './entities/book.entity';
 import { CreateBookDto } from './dto/create-book.dto';
 import { UpdateBookDto } from './dto/update-book.dto';
 
-export interface Book {
-  id: number;
-  title: string;
-  author: string;
-  description?: string;
-  isbn: string;
-  available: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
 @Injectable()
 export class BooksService {
-  private books: Book[] = [
-    {
-      id: 1,
-      title: 'Le Seigneur des Anneaux',
-      author: 'J.R.R. Tolkien',
-      description: 'Un classique de la fantasy',
-      isbn: '978-0547928227',
-      available: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-  ];
-  private nextId = 2;
+  constructor(
+    @InjectRepository(Book) private readonly repo: Repository<Book>,
+  ) {}
 
-  create(createBookDto: CreateBookDto): Book {
-    const book: Book = {
-      id: this.nextId++,
-      ...createBookDto,
-      available: createBookDto.available ?? true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+  create(dto: CreateBookDto) {
+    const entity = this.repo.create({
+      ...dto,
+      available: dto.available ?? true,
+    });
+    return this.repo.save(entity);
+  }
 
-    this.books.push(book);
+  findAll(q?: string) {
+    if (q?.trim()) {
+      return this.repo.find({
+        where: [
+          { title: ILike(`%${q}%`) },
+          { author: ILike(`%${q}%`) },
+          { isbn: ILike(`%${q}%`) },
+        ],
+        order: { id: 'ASC' },
+      });
+    }
+    return this.repo.find({ order: { id: 'ASC' } });
+  }
+
+  async findOne(id: number) {
+    const book = await this.repo.findOne({ where: { id } });
+    if (!book) throw new NotFoundException(`Book ${id} not found`);
     return book;
   }
 
-  findAll(): Book[] {
-    return this.books;
+  async update(id: number, dto: UpdateBookDto) {
+    const book = await this.findOne(id);
+    Object.assign(book, dto);
+    return this.repo.save(book);
   }
 
-  findOne(id: number): Book {
-    const book = this.books.find((b) => b.id === id);
-    if (!book) {
-      throw new NotFoundException(`Book with ID ${id} not found`);
-    }
-    return book;
-  }
-
-  update(id: number, updateBookDto: UpdateBookDto): Book {
-    const bookIndex = this.books.findIndex((b) => b.id === id);
-    if (bookIndex === -1) {
-      throw new NotFoundException(`Book with ID ${id} not found`);
-    }
-
-    this.books[bookIndex] = {
-      ...this.books[bookIndex],
-      ...updateBookDto,
-      updatedAt: new Date(),
-    };
-
-    return this.books[bookIndex];
-  }
-
-  remove(id: number): void {
-    const bookIndex = this.books.findIndex((b) => b.id === id);
-    if (bookIndex === -1) {
-      throw new NotFoundException(`Book with ID ${id} not found`);
-    }
-
-    this.books.splice(bookIndex, 1);
+  async remove(id: number) {
+    const book = await this.findOne(id);
+    await this.repo.remove(book);
   }
 }

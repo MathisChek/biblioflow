@@ -1,0 +1,8 @@
+172.18.0.1 - - [19/Aug/2025:10:01:26 +0000] "GET / HTTP/1.1" 200 615 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 OPR/120.0.0.0" "-"
+172.18.0.1 - - [19/Aug/2025:10:01:26 +0000] "GET /favicon.ico HTTP/1.1" 404 555 "http://localhost/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 OPR/120.0.0.0" "-"
+172.18.0.1 - - [19/Aug/2025:10:02:10 +0000] "GET /api/health HTTP/1.1" 200 81 "-" "curl/7.81.0" "-"
+172.18.0.1 - - [19/Aug/2025:10:02:20 +0000] "GET /api/books HTTP/1.1" 200 232 "-" "curl/7.81.0" "-"
+172.18.0.1 - - [19/Aug/2025:10:02:41 +0000] "POST /api/books HTTP/1.1" 400 232 "-" "curl/7.81.0" "-"
+172.18.0.1 - - [19/Aug/2025:10:03:33 +0000] "GET /api/books HTTP/1.1" 200 232 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 OPR/120.0.0.0" "-"
+172.18.0.1 - - [19/Aug/2025:10:03:46 +0000] "GET /api/health HTTP/1.1" 200 81 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 OPR/120.0.0.0" "-"
+172.18.0.1 - - [19/Aug/2025:10:07:44 +0000] "GET / HTTP/1.1" 304 0 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 OPR/120.0.0.0" "-"
