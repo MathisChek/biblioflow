@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  backend-dev:
+    build:
+      context: ./biblioflow-backend
+      target: dev
+    container_name: biblioflow-backend-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+    volumes:
+      - ./biblioflow-backend:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - biblioflow-backend
+      - biblioflow-frontend
+
+  backend-prod:
+    build:
+      context: ./biblioflow-backend
+      target: prod
+    container_name: biblioflow-backend-prod
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - biblioflow-backend
+      - biblioflow-frontend
+
+  frontend-dev:
+    build:
+      context: ./biblioflow-frontend
+      target: dev
+    container_name: biblioflow-frontend-dev
+    restart: unless-stopped
+    ports:
+      - "4200:4200"
+    volumes:
+      - ./biblioflow-frontend/src:/app/src
+      - /app/node_modules
+    environment:
+      - CHOKIDAR_USEPOLLING=1
+    networks:
+      - biblioflow-frontend
+
+  frontend-prod:
+    build:
+      context: ./biblioflow-frontend
+      target: prod
+    container_name: biblioflow-frontend-prod
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    networks:
+      - biblioflow-frontend
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: biblioflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME:-biblioflow_db}
+      POSTGRES_USER: ${DATABASE_USER:-postgres}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "${DATABASE_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-postgres} -d ${DATABASE_NAME:-biblioflow_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - biblioflow-backend
+
+volumes:
+  postgres_data:
+    name: biblioflow_postgres_data
+
+networks:
+  biblioflow-backend:
+    name: biblioflow_backend
+    driver: bridge
+  biblioflow-frontend:
+    name: biblioflow_frontend
+    driver: bridge
