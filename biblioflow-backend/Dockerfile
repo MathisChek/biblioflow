@@ -15,7 +15,7 @@ RUN npm ci
 COPY . .
 
 # Exposer le port 3000
-EXPOSE 3000
+EXPOSE 3000 9229
 
 # Commande de démarrage en mode développement
 CMD ["npm", "run", "start:dev"]
