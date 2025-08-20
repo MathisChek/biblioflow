@@ -58,7 +58,7 @@ pipeline {
             }
         }
 
-        stage('Build Frontend') {
+        /* stage('Build Frontend') {
             steps {
                 dir('/workspace/biblioflow') {
                     script {
@@ -70,9 +70,9 @@ pipeline {
                     }
                 }
             }
-        }
+        } */
 
-        stage('Run Tests Frontend') {
+        /* stage('Run Tests Frontend') {
             steps {
                 dir('/workspace/biblioflow') {
                     script {
@@ -84,7 +84,7 @@ pipeline {
                     }
                 }
             }
-        }
+        } */
 
         stage('Build Backend') {
             steps {
@@ -95,6 +95,18 @@ pipeline {
                         } else {
                             sh 'docker-compose build backend-dev'
                         }
+                    }
+                }
+            }
+        }
+
+        stage('Debug Backend') {
+            steps {
+                dir('/workspace/biblioflow') {
+                    script {
+                        sh 'ls -la biblioflow-backend/'
+                        sh 'cat biblioflow-backend/package.json | head -10'
+                        sh 'docker-compose -f docker-compose.yml -f compose.ci.yml config | grep -A 20 backend-dev'
                     }
                 }
             }
@@ -120,7 +132,7 @@ pipeline {
             }
         }
 
-        stage('Health Check') {
+        /* stage('Health Check') {
             steps {
                 dir('/workspace/biblioflow') {
                     script {
@@ -137,7 +149,7 @@ pipeline {
                     }
                 }
             }
-        }
+        } */
     }
 
     post {

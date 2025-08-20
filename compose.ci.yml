@@ -3,7 +3,7 @@ version: '3.8'
 services:
   backend-dev:
     volumes:
-      # Supprime le bind mount du code source en CI
+      - /workspace/biblioflow/biblioflow-backend:/app
       - /app/node_modules
     environment:
       - NODE_ENV=ci
@@ -12,18 +12,32 @@ services:
 
   frontend-dev:
     volumes:
-      # Supprime le bind mount du code source en CI
+      - /workspace/biblioflow/biblioflow-frontend:/app
       - /app/node_modules
     environment:
       - NODE_ENV=ci
+    ports:
+      - "4201:4200"  # Changer le port pour éviter les conflits
 
   postgres:
     environment:
       - POSTGRES_DB=biblioflow_ci
     volumes:
-      # Volume temporaire pour CI (pas de persistance nécessaire)
       - postgres_ci_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d:ro
+
+  # Désactiver les services qui créent des conflits de ports
+  frontend-prod:
+    profiles:
+      - disabled
+
+  backend-prod:
+    profiles:
+      - disabled
+
+  nginx:
+    profiles:
+      - disabled
 
 volumes:
   postgres_ci_data:
