@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile.jenkins
+    container_name: biblioflow-jenkins
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/workspace/biblioflow
+    environment:
+      - JENKINS_OPTS="--httpPort=8080"
+    user: root
+    networks:
+      - jenkins
+
+volumes:
+  jenkins_home:
+    name: biblioflow_jenkins_home
+
+networks:
+  jenkins:
+    name: biblioflow_jenkins
+    driver: bridge

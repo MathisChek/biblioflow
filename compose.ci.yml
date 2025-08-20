@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  backend-dev:
+    volumes:
+      # Supprime le bind mount du code source en CI
+      - /app/node_modules
+    environment:
+      - NODE_ENV=ci
+      - DATABASE_SYNCHRONIZE=true
+      - DATABASE_LOGGING=false
+
+  frontend-dev:
+    volumes:
+      # Supprime le bind mount du code source en CI
+      - /app/node_modules
+    environment:
+      - NODE_ENV=ci
+
+  postgres:
+    environment:
+      - POSTGRES_DB=biblioflow_ci
+    volumes:
+      # Volume temporaire pour CI (pas de persistance nécessaire)
+      - postgres_ci_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  postgres_ci_data:
