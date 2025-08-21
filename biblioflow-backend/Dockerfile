@@ -1,11 +1,11 @@
 # ===== Stage DEV =====
 FROM node:22-alpine AS dev
-WORKDIR /app
+WORKDIR /usr/src/app
 
 # Installer curl pour les healthchecks
 RUN apk add --no-cache curl
 
-# Copier les fichiers package
+# Copier les fichiers package en premier
 COPY package*.json ./
 
 # Installer toutes les dépendances (dev + prod)
@@ -14,7 +14,9 @@ RUN npm ci
 # Copier le code source
 COPY . .
 
-# Exposer le port 3000
+RUN npm run build
+
+# Exposer le port 3000 et debug port
 EXPOSE 3000 9229
 
 # Commande de démarrage en mode développement

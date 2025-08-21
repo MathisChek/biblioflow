@@ -13,7 +13,7 @@ services:
     volumes:
       - jenkins_home:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
-      - .:/workspace/biblioflow
+      - /home/mathis/code/MathisChek/nexa-project/biblioflow-project/biblioflow:/workspace/biblioflow
     environment:
       - JENKINS_OPTS="--httpPort=8080"
     user: root

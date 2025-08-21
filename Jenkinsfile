@@ -1,176 +1,128 @@
 pipeline {
     agent any
-
+    options {
+        disableConcurrentBuilds()
+    }
     tools {
         nodejs "Node_24"
     }
-
     environment {
-        COMPOSE_PROJECT_NAME = "biblioflow-ci"
-        DOCKER_BUILDKIT = "1"
+        DOCKER_COMPOSE_DEPLOY_BASE = "${WORKSPACE}/compose.yml"
+        DOCKER_COMPOSE_DEPLOY_OVR = "${WORKSPACE}/compose.ci.yml"
+        COMPOSE_PROJECT_NAME_DEPLOY = "bibliflow"
+        CI = "true"
     }
-
     stages {
         stage('Checkout') {
             steps {
-                dir('/workspace/biblioflow') {
+                dir("${WORKSPACE}") {
                     sh 'pwd && ls -la'
-                    echo 'Repository local monté'
+                    echo 'Files already mounted from volume'
                 }
             }
         }
-
-        stage('Preflight Check') {
+        stage('Preflight') {
             steps {
-                dir('/workspace/biblioflow') {
-                    script {
-                        // Vérifier que Docker fonctionne
-                        sh 'docker --version'
-                        sh 'docker-compose --version'
-
-                        // Vérifier les fichiers nécessaires
-                        sh 'ls -la docker-compose.yml'
-
-                        if (fileExists('compose.ci.yml')) {
-                            echo 'Override CI présent'
-                        } else {
-                            echo 'Pas d\'override, on continue'
-                        }
-                    }
+                dir("${WORKSPACE}") {
+                    sh 'test -f ${DOCKER_COMPOSE_DEPLOY_BASE} && echo "OK: compose.yml found" || (echo "ERROR: compose.yml missing" && exit 1)'
+                    sh '[ -f ${DOCKER_COMPOSE_DEPLOY_OVR} ] && echo "compose.ci.yml present (will be used)" || echo "compose.ci.yml not present (will be skipped)"'
                 }
             }
         }
-
         stage('Prepare Environment') {
             steps {
-                dir('/workspace/biblioflow') {
-                    script {
-                        // Copier .env pour CI
-                        sh 'cp .env .env.ci'
-
-                        // Modifier les variables pour CI
-                        sh '''
-                            sed -i 's/biblioflow_dev/biblioflow_ci/g' .env.ci
-                            echo "NODE_ENV=ci" >> .env.ci
-                        '''
-                    }
-                }
+                sh '''
+                    cat > "${WORKSPACE}/.env" << EOF
+DB_NAME=bibliflow_ci
+DB_USER=bibliflow_user
+DB_PASSWORD=ci_password
+JWT_SECRET=ci-test-secret-key
+BACKEND_PORT=3000
+FRONTEND_PORT=4200
+API_URL=http://backend:3000/api/v1
+NODE_ENV=test
+EOF
+                    chmod 600 "${WORKSPACE}/.env"
+                    echo "✓ .env created for CI"
+                '''
             }
         }
-
-        /* stage('Build Frontend') {
+        stage('Assemble deploy compose files') {
             steps {
-                dir('/workspace/biblioflow') {
-                    script {
-                        if (fileExists('compose.ci.yml')) {
-                            sh 'docker-compose -f docker-compose.yml -f compose.ci.yml build frontend-dev'
-                        } else {
-                            sh 'docker-compose build frontend-dev'
-                        }
-                    }
-                }
-            }
-        } */
-
-        /* stage('Run Tests Frontend') {
-            steps {
-                dir('/workspace/biblioflow') {
-                    script {
-                        if (fileExists('compose.ci.yml')) {
-                            sh 'docker-compose -f docker-compose.yml -f compose.ci.yml run --rm frontend-dev npm run test:ci'
-                        } else {
-                            echo 'Tests frontend à configurer'
-                        }
-                    }
-                }
-            }
-        } */
-
-        stage('Build Backend') {
-            steps {
-                dir('/workspace/biblioflow') {
-                    script {
-                        if (fileExists('compose.ci.yml')) {
-                            sh 'docker-compose -f docker-compose.yml -f compose.ci.yml build backend-dev'
-                        } else {
-                            sh 'docker-compose build backend-dev'
-                        }
-                    }
-                }
+                sh '''
+                    DEPLOY_FILES="-f ${DOCKER_COMPOSE_DEPLOY_BASE}"
+                    if [ -f "${DOCKER_COMPOSE_DEPLOY_OVR}" ]; then
+                        DEPLOY_FILES="$DEPLOY_FILES -f ${DOCKER_COMPOSE_DEPLOY_OVR}"
+                    fi
+                    echo "$DEPLOY_FILES" > .deploy_files
+                    echo "Using compose files: $(cat .deploy_files)"
+                '''
             }
         }
-
-        stage('Debug Backend') {
+        stage('Deploy - Stop Services') {
             steps {
-                dir('/workspace/biblioflow') {
-                    script {
-                        sh 'ls -la biblioflow-backend/'
-                        sh 'cat biblioflow-backend/package.json | head -10'
-                        sh 'docker-compose -f docker-compose.yml -f compose.ci.yml config | grep -A 20 backend-dev'
-                    }
-                }
+                sh 'docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) down -v || true'
             }
         }
-
-        stage('Deploy for Testing') {
+        stage('Deploy - Build') {
             steps {
-                dir('/workspace/biblioflow') {
-                    script {
-                        // Arrêter les services existants
-                        sh 'docker-compose down || true'
-
-                        // Démarrer avec la config CI
-                        if (fileExists('compose.ci.yml')) {
-                            sh 'docker-compose -f docker-compose.yml -f compose.ci.yml up -d postgres'
-                            sh 'sleep 30'  // Attendre que postgres soit prêt
-                            sh 'docker-compose -f docker-compose.yml -f compose.ci.yml up -d backend-dev frontend-dev'
-                        } else {
-                            sh 'docker-compose up -d postgres backend-dev frontend-dev'
-                        }
-                    }
-                }
+                sh 'docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) build --no-cache backend frontend'
             }
         }
-
-        /* stage('Health Check') {
+        stage('Deploy - Up') {
             steps {
-                dir('/workspace/biblioflow') {
-                    script {
-                        // Attendre que les services soient prêts
-                        sh 'sleep 60'
+                sh '''
+                    # Démarrer postgres d'abord
+                    docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) up -d postgres
 
-                        // Tester l'API
-                        sh 'curl -f http://localhost:3000/health || exit 1'
+                    # Attente simple
+                    echo "Waiting for PostgreSQL..."
+                    sleep 30
 
-                        // Tester les routes books
-                        sh 'curl -f http://localhost:3000/books || exit 1'
+                    # Démarrer le reste
+                    docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) up -d backend frontend
 
-                        echo 'Health checks passed!'
-                    }
-                }
+                    echo "Services started successfully"
+                '''
             }
-        } */
+        }
+        stage('Health Check') {
+            steps {
+                sh '''
+                    echo "Waiting for services..."
+                    sleep 30
+
+                    echo "=== Container Status ==="
+                    docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) ps
+
+                    echo "=== Backend Logs ==="
+                    docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) logs --tail=20 backend || true
+
+                    echo "=== Frontend Logs ==="
+                    docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) logs --tail=20 frontend || true
+
+                    echo "=== Testing Backend Health ==="
+                    for i in {1..5}; do
+                        if curl -f -s http://localhost:3000/health || curl -f -s http://localhost:3000/api/health || curl -f -s http://localhost:3000/; then
+                            echo "✓ Backend responding!"
+                            break
+                        elif [ $i -eq 5 ]; then
+                            echo "✗ Backend not responding after 5 attempts"
+                        else
+                            echo "Attempt $i/5..."
+                            sleep 10
+                        fi
+                    done
+                '''
+            }
+        }
     }
-
     post {
-        success {
-            echo 'Pipeline succeeded!'
-            echo '==================================='
-            echo 'Application déployée et disponible :'
-            echo '- Frontend: http://localhost:4200'
-            echo '- Backend: http://localhost:3000'
-            echo '- API Health: http://localhost:3000/health'
-            echo '- API Books: http://localhost:3000/books'
-            echo '==================================='
-            echo 'Pour arrêter : docker-compose down'
-            // Ne pas faire de nettoyage automatique
+        always {
+            sh 'rm -f "${WORKSPACE}/.env" .deploy_files || true'
         }
         failure {
-            echo 'Pipeline failed!'
-            dir('/workspace/biblioflow') {
-                sh 'docker-compose down || true'  // Nettoyer seulement si échec
-                sh 'docker system prune -f || true'
-            }
+            sh 'docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) logs --tail=50 || true'
         }
     }
 }

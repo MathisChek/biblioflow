@@ -1,0 +1,112 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-bibliflow_dev}
+      POSTGRES_USER: ${DB_USER:-bibliflow_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-dev_password}
+      POSTGRES_HOST_AUTH_METHOD: trust
+    env_file:
+      - .env
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init-scripts:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DB_USER:-bibliflow_user} -d ${DB_NAME:-bibliflow_dev}",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: on-failure
+
+  backend:
+    build:
+      context: ./bibliflow-backend
+      dockerfile: Dockerfile
+      target: development
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://${DB_USER:-bibliflow_user}:${DB_PASSWORD:-dev_password}@postgres:5432/${DB_NAME:-bibliflow_dev}
+      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_in_production}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:4200,http://127.0.0.1:4200}
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+      DEBUG: ${DEBUG:-bibliflow:*}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+    env_file:
+      - .env
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+      - "${DEBUG_PORT:-9229}:9229"
+    command: npm run start:dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+    init: true
+
+  frontend:
+    build:
+      context: ./bibliflow-frontend
+      dockerfile: Dockerfile
+      target: development
+    environment:
+      API_URL: ${API_URL:-http://localhost:3000/api/v1}
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+      WDS_SOCKET_HOST: localhost
+      WDS_SOCKET_PORT: ${FRONTEND_PORT:-4200}
+      NG_CLI_ANALYTICS: "false"
+    env_file:
+      - .env
+    ports:
+      - "${FRONTEND_PORT:-4200}:4200"
+    command: npm run start -- --host 0.0.0.0 --poll 2000
+    restart: on-failure
+    init: true
+
+  # Jenkins local uniquement (ne sera PAS lancÃ© en CI)
+  jenkins:
+    profiles: ["local-jenkins"]
+    build:
+      context: ./jenkins
+      dockerfile: Dockerfile
+    user: root
+    environment:
+      JAVA_OPTS: "-Djenkins.install.runSetupWizard=false"
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: on-failure
+
+  sonarqube:
+    image: sonarqube:community
+    container_name: sonarqube
+    environment:
+      - SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
+    ports:
+      - "9000:9000"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+    networks:
+      - default
+
+volumes:
+  postgres_data:
+  backend_node_modules:
+  frontend_node_modules:
+  jenkins_home:
+  # sonarqube_data:
+  # sonarqube_extensions:

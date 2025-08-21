@@ -1,43 +1,34 @@
-version: '3.8'
-
 services:
-  backend-dev:
-    volumes:
-      - /workspace/biblioflow/biblioflow-backend:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=ci
-      - DATABASE_SYNCHRONIZE=true
-      - DATABASE_LOGGING=false
-
-  frontend-dev:
-    volumes:
-      - /workspace/biblioflow/biblioflow-frontend:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=ci
-    ports:
-      - "4201:4200"  # Changer le port pour éviter les conflits
-
   postgres:
     environment:
-      - POSTGRES_DB=biblioflow_ci
-    volumes:
-      - postgres_ci_data:/var/lib/postgresql/data
-      - ./database/init:/docker-entrypoint-initdb.d:ro
+      POSTGRES_DB: bibliflow_ci
+      POSTGRES_USER: bibliflow_user
+      POSTGRES_PASSWORD: ci_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bibliflow_user -d bibliflow_ci"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
 
-  # Désactiver les services qui créent des conflits de ports
-  frontend-prod:
-    profiles:
-      - disabled
+  backend:
+    environment:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://bibliflow_user:ci_password@postgres:5432/bibliflow_ci
+      JWT_SECRET: ci-test-secret
+    # Pas de volumes en CI (code figé dans l'image)
+    command: npm run start:prod
 
-  backend-prod:
-    profiles:
-      - disabled
+  frontend:
+    environment:
+      NODE_ENV: production
+      API_URL: http://backend:3000/api/v1
+    # Pas de volumes en CI
+    command: npm start
 
-  nginx:
-    profiles:
-      - disabled
+  # Désactiver les services non nécessaires en CI
+  jenkins:
+    profiles: ["disabled"]
 
-volumes:
-  postgres_ci_data:
+  sonarqube:
+    profiles: ["disabled"]
