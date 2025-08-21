@@ -19,6 +19,7 @@ services:
     user: root
     networks:
       - jenkins
+      - biblioflow_default
 
 volumes:
   jenkins_home:
@@ -28,3 +29,5 @@ networks:
   jenkins:
     name: biblioflow_jenkins
     driver: bridge
+  biblioflow_default:
+    external: true

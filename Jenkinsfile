@@ -9,7 +9,7 @@ pipeline {
     environment {
         DOCKER_COMPOSE_DEPLOY_BASE = "${WORKSPACE}/compose.yml"
         DOCKER_COMPOSE_DEPLOY_OVR = "${WORKSPACE}/compose.ci.yml"
-        COMPOSE_PROJECT_NAME_DEPLOY = "bibliflow"
+        COMPOSE_PROJECT_NAME_DEPLOY = "biblioflow"
         CI = "true"
     }
     stages {
@@ -69,6 +69,42 @@ EOF
                 sh 'docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) build --no-cache backend frontend'
             }
         }
+
+        stage('Debug SonarScanner') {
+            steps {
+                script {
+                    def scannerHome = tool 'SonarQube'
+                    sh "echo 'Scanner home: ${scannerHome}'"
+                    sh "ls -la ${scannerHome}/bin/"
+                    sh "${scannerHome}/bin/sonar-scanner --version"
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    def scannerHome = tool 'SonarQube'
+
+                    withSonarQubeEnv('SonarQube') {
+                        dir('bibliflow-backend') {
+                            sh 'npm install'
+                            sh "${scannerHome}/bin/sonar-scanner"
+                        }
+
+                        dir('bibliflow-frontend') {
+                            sh 'npm install'
+                            sh "${scannerHome}/bin/sonar-scanner"
+                        }
+                    }
+
+                    timeout(time: 2, unit: 'MINUTES') {
+                        waitForQualityGate abortPipeline: true
+                    }
+                }
+            }
+        }
+
         stage('Deploy - Up') {
             steps {
                 sh '''

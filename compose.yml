@@ -101,12 +101,16 @@ services:
       - sonarqube_data:/opt/sonarqube/data
       - sonarqube_extensions:/opt/sonarqube/extensions
     networks:
-      - default
+      -  biblioflow_default
+
+  networks:
+    biblioflow_default:
+      external: true
 
 volumes:
   postgres_data:
   backend_node_modules:
   frontend_node_modules:
   jenkins_home:
-  # sonarqube_data:
-  # sonarqube_extensions:
+  sonarqube_data:
+  sonarqube_extensions:
