@@ -1,0 +1,6 @@
+projectKey=biblioflow-frontend
+serverUrl=http://sonarqube:9000
+serverVersion=25.8.0.112029
+dashboardUrl=http://sonarqube:9000/dashboard?id=biblioflow-frontend
+ceTaskId=8de3198f-7c69-45c4-9032-9baf513fba5e
+ceTaskUrl=http://sonarqube:9000/api/ce/task?id=8de3198f-7c69-45c4-9032-9baf513fba5e
