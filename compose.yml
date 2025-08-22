@@ -103,9 +103,9 @@ services:
     networks:
       -  biblioflow_default
 
-  networks:
-    biblioflow_default:
-      external: true
+networks:
+  biblioflow_default:
+    external: true
 
 volumes:
   postgres_data:

@@ -60,9 +60,13 @@ EOF
             }
         }
         stage('Deploy - Stop Services') {
-            steps {
-                sh 'docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) down -v || true'
-            }
+          steps {
+            sh '''
+              # stop seulement les services d'app, pas Sonar
+              docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) stop backend frontend postgres || true
+              docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) rm -f backend frontend postgres || true
+            '''
+          }
         }
         stage('Deploy - Build') {
             steps {
@@ -79,6 +83,25 @@ EOF
                     sh "${scannerHome}/bin/sonar-scanner --version"
                 }
             }
+        }
+
+        stage('Ensure SonarQube UP') {
+          steps {
+            sh '''
+              # (re)démarre Sonar si besoin
+              docker start sonarqube || docker compose -f ${WORKSPACE}/compose.yml up -d sonarqube
+
+              # attend le statut UP
+              for i in {1..30}; do
+                if curl -sf http://sonarqube:9000/api/system/status | grep -q '"status":"UP"'; then
+                  echo "SonarQube is UP"
+                  break
+                fi
+                echo "Waiting SonarQube... ($i/30)"
+                sleep 2
+              done
+            '''
+          }
         }
 
         stage('SonarQube Analysis') {
