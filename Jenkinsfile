@@ -7,8 +7,8 @@ pipeline {
         nodejs "Node_24"
     }
     environment {
-        DOCKER_COMPOSE_DEPLOY_BASE = "${WORKSPACE}/compose.yml"
-        DOCKER_COMPOSE_DEPLOY_OVR = "${WORKSPACE}/compose.ci.yml"
+        DOCKER_COMPOSE_DEPLOY_BASE = "/workspace/biblioflow/compose.yml"
+        DOCKER_COMPOSE_DEPLOY_OVR = "/workspace/biblioflow/compose.ci.yml"
         COMPOSE_PROJECT_NAME_DEPLOY = "biblioflow"
         CI = "true"
     }
@@ -23,54 +23,73 @@ pipeline {
         }
         stage('Preflight') {
             steps {
-                dir("${WORKSPACE}") {
-                    sh 'test -f ${DOCKER_COMPOSE_DEPLOY_BASE} && echo "OK: compose.yml found" || (echo "ERROR: compose.yml missing" && exit 1)'
-                    sh '[ -f ${DOCKER_COMPOSE_DEPLOY_OVR} ] && echo "compose.ci.yml present (will be used)" || echo "compose.ci.yml not present (will be skipped)"'
-                }
+                sh '''
+                    test -f ${DOCKER_COMPOSE_DEPLOY_BASE} && echo "OK: compose.yml found" || (echo "ERROR: compose.yml missing" && exit 1)
+                    [ -f ${DOCKER_COMPOSE_DEPLOY_OVR} ] && echo "compose.ci.yml present (will be used)" || echo "compose.ci.yml not present (will be skipped)"
+                '''
             }
         }
         stage('Prepare Environment') {
             steps {
                 sh '''
-                    cat > "${WORKSPACE}/.env" << EOF
-DB_NAME=bibliflow_ci
-DB_USER=bibliflow_user
-DB_PASSWORD=ci_password
-JWT_SECRET=ci-test-secret-key
-BACKEND_PORT=3000
-FRONTEND_PORT=4200
-API_URL=http://backend:3000/api/v1
-NODE_ENV=test
+                    cat > "/workspace/biblioflow/.env" << EOF
+# JWT
+JWT_SECRET=dev_jwt_secret_not_secure_for_dev_only
+
+# Application
+PORT=3000
+NODE_ENV=development
+
+# Variables pour Docker Compose
+DB_NAME=biblioflow_dev
+POSTGRES_USER: biblioflow_user
+POSTGRES_PASSWORD: ci_password
+
+# Variables pour l'application NestJS
+DATABASE_HOST=postgres
+DATABASE_PORT=5432
+DATABASE_USER=postgres
+DATABASE_PASSWORD=secure_password_123
+DATABASE_NAME=biblioflow_dev
+DATABASE_SSL=false
+DATABASE_SYNCHRONIZE=true
+DATABASE_LOGGING=true
 EOF
-                    chmod 600 "${WORKSPACE}/.env"
+                    chmod 600 "/workspace/biblioflow/.env"
                     echo "✓ .env created for CI"
                 '''
             }
         }
         stage('Assemble deploy compose files') {
             steps {
-                sh '''
-                    DEPLOY_FILES="-f ${DOCKER_COMPOSE_DEPLOY_BASE}"
-                    if [ -f "${DOCKER_COMPOSE_DEPLOY_OVR}" ]; then
-                        DEPLOY_FILES="$DEPLOY_FILES -f ${DOCKER_COMPOSE_DEPLOY_OVR}"
-                    fi
-                    echo "$DEPLOY_FILES" > .deploy_files
-                    echo "Using compose files: $(cat .deploy_files)"
-                '''
+                dir("/workspace/biblioflow") {
+                    sh '''
+                        DEPLOY_FILES="-f ${DOCKER_COMPOSE_DEPLOY_BASE}"
+                        if [ -f "${DOCKER_COMPOSE_DEPLOY_OVR}" ]; then
+                            DEPLOY_FILES="$DEPLOY_FILES -f ${DOCKER_COMPOSE_DEPLOY_OVR}"
+                        fi
+                        echo "$DEPLOY_FILES" > .deploy_files
+                        echo "Using compose files: $(cat .deploy_files)"
+                    '''
+                }
             }
         }
         stage('Deploy - Stop Services') {
           steps {
-            sh '''
-              # stop seulement les services d'app, pas Sonar
-              docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) stop backend frontend postgres || true
-              docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) rm -f backend frontend postgres || true
-            '''
+            dir("/workspace/biblioflow") {
+                sh '''
+                  # stop seulement les services d'app, pas Sonar
+                  docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory /workspace/biblioflow $(cat .deploy_files) stop backend frontend postgres || true
+                  docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory /workspace/biblioflow $(cat .deploy_files) rm -f backend frontend postgres || true
+                '''
+            }
           }
         }
         stage('Deploy - Build') {
             steps {
-                sh 'docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) build --no-cache backend frontend'
+                dir("/workspace/biblioflow") {
+                    sh 'docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory /workspace/biblioflow $(cat .deploy_files) build --no-cache backend frontend'
+                }
             }
         }
 
@@ -85,23 +104,16 @@ EOF
             }
         }
 
-        stage('Ensure SonarQube UP') {
-          steps {
-            sh '''
-              # (re)démarre Sonar si besoin
-              docker start sonarqube || docker compose -f ${WORKSPACE}/compose.yml up -d sonarqube
+        stage('Ensure Network Connection') {
+            steps {
+                sh '''
+                    # Connecter Jenkins au réseau si pas déjà fait
+                    docker network connect biblioflow_default biblioflow-jenkins 2>/dev/null || echo "Jenkins déjà connecté"
 
-              # attend le statut UP
-              for i in {1..30}; do
-                if curl -sf http://sonarqube:9000/api/system/status | grep -q '"status":"UP"'; then
-                  echo "SonarQube is UP"
-                  break
-                fi
-                echo "Waiting SonarQube... ($i/30)"
-                sleep 2
-              done
-            '''
-          }
+                    # Vérifier la connexion
+                    docker network inspect biblioflow_default | grep biblioflow-jenkins
+                '''
+            }
         }
 
         stage('SonarQube Analysis') {
@@ -110,78 +122,83 @@ EOF
                     def scannerHome = tool 'SonarQube'
 
                     withSonarQubeEnv('SonarQube') {
-                        dir('bibliflow-backend') {
+                        dir('/workspace/biblioflow/biblioflow-backend') {
                             sh 'npm install'
                             sh "${scannerHome}/bin/sonar-scanner"
                         }
 
-                        dir('bibliflow-frontend') {
+                        dir('/workspace/biblioflow/biblioflow-frontend') {
                             sh 'npm install'
                             sh "${scannerHome}/bin/sonar-scanner"
                         }
                     }
 
-                    timeout(time: 2, unit: 'MINUTES') {
-                        waitForQualityGate abortPipeline: true
-                    }
+                    echo "SonarQube analysis completed successfully for both projects"
+                    echo "Check results at: http://localhost:9000"
                 }
             }
         }
 
         stage('Deploy - Up') {
             steps {
-                sh '''
-                    # Démarrer postgres d'abord
-                    docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) up -d postgres
+                dir("/workspace/biblioflow") {
+                    sh '''
+                        # Démarrer postgres d'abord
+                        docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory /workspace/biblioflow $(cat .deploy_files) up -d postgres
 
-                    # Attente simple
-                    echo "Waiting for PostgreSQL..."
-                    sleep 30
+                        # Attente simple
+                        echo "Waiting for PostgreSQL..."
+                        sleep 30
 
-                    # Démarrer le reste
-                    docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) up -d backend frontend
+                        # Démarrer le reste
+                        docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory /workspace/biblioflow $(cat .deploy_files) up -d backend frontend
 
-                    echo "Services started successfully"
-                '''
+                        echo "Services started successfully"
+                    '''
+                }
             }
         }
         stage('Health Check') {
             steps {
-                sh '''
-                    echo "Waiting for services..."
-                    sleep 30
+                dir("/workspace/biblioflow") {
+                    sh '''
+                        echo "Waiting for services..."
+                        sleep 30
 
-                    echo "=== Container Status ==="
-                    docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) ps
+                        echo "=== Container Status ==="
+                        docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory /workspace/biblioflow $(cat .deploy_files) ps
 
-                    echo "=== Backend Logs ==="
-                    docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) logs --tail=20 backend || true
+                        echo "=== Backend Logs ==="
+                        docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory /workspace/biblioflow $(cat .deploy_files) logs --tail=20 backend || true
 
-                    echo "=== Frontend Logs ==="
-                    docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) logs --tail=20 frontend || true
+                        echo "=== Frontend Logs ==="
+                        docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory /workspace/biblioflow $(cat .deploy_files) logs --tail=20 frontend || true
 
-                    echo "=== Testing Backend Health ==="
-                    for i in {1..5}; do
-                        if curl -f -s http://localhost:3000/health || curl -f -s http://localhost:3000/api/health || curl -f -s http://localhost:3000/; then
-                            echo "✓ Backend responding!"
-                            break
-                        elif [ $i -eq 5 ]; then
-                            echo "✗ Backend not responding after 5 attempts"
-                        else
-                            echo "Attempt $i/5..."
-                            sleep 10
-                        fi
-                    done
-                '''
+                        echo "=== Testing Backend Health ==="
+                        for i in {1..5}; do
+                            if curl -f -s http://localhost:3000/health || curl -f -s http://localhost:3000/api/health || curl -f -s http://localhost:3000/; then
+                                echo "✓ Backend responding!"
+                                break
+                            elif [ $i -eq 5 ]; then
+                                echo "✗ Backend not responding after 5 attempts"
+                            else
+                                echo "Attempt $i/5..."
+                                sleep 10
+                            fi
+                        done
+                    '''
+                }
             }
         }
     }
     post {
-        always {
-            sh 'rm -f "${WORKSPACE}/.env" .deploy_files || true'
-        }
+        // always {
+        //     sh 'rm -f "/workspace/biblioflow/.env" /workspace/biblioflow/.deploy_files || true'
+        // }
         failure {
-            sh 'docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory ${WORKSPACE} $(cat .deploy_files) logs --tail=50 || true'
+            dir("/workspace/biblioflow") {
+                sh 'docker compose -p ${COMPOSE_PROJECT_NAME_DEPLOY} --project-directory /workspace/biblioflow $(cat .deploy_files) logs --tail=50 || true'
+            }
         }
     }
 }

@@ -19,7 +19,7 @@ ENV CHROME_PATH=/usr/bin/chromium-browser
 COPY package*.json ./
 
 # Installer les dépendances
-RUN npm ci
+RUN rm -f package-lock.json && npm install
 
 # Copier le code source
 COPY . .
@@ -39,7 +39,7 @@ WORKDIR /app
 
 # Copier package.json et installer les dépendances
 COPY package*.json ./
-RUN npm ci
+RUN rm -f package-lock.json && npm install
 
 # Copier le code source
 COPY . .

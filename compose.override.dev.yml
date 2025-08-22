@@ -1,10 +1,10 @@
 services:
   backend:
     volumes:
-      - ./bibliflow-backend:/usr/src/app:cached
+      - ./biblioflow-backend:/usr/src/app:cached
       - backend_node_modules:/usr/src/app/node_modules
 
   frontend:
     volumes:
-      - ./bibliflow-frontend:/usr/src/app:cached
+      - ./biblioflow-frontend:/usr/src/app:cached
       - frontend_node_modules:/usr/src/app/node_modules

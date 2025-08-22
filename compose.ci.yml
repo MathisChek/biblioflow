@@ -1,11 +1,11 @@
 services:
   postgres:
     environment:
-      POSTGRES_DB: bibliflow_ci
-      POSTGRES_USER: bibliflow_user
+      POSTGRES_DB: biblioflow_dev
+      POSTGRES_USER: biblioflow_user
       POSTGRES_PASSWORD: ci_password
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U bibliflow_user -d bibliflow_ci"]
+      test: ["CMD-SHELL", "pg_isready -U biblioflow_user -d biblioflow_dev"]
       interval: 5s
       timeout: 3s
       retries: 3
@@ -14,12 +14,14 @@ services:
   backend:
     environment:
       NODE_ENV: test
-      DATABASE_URL: postgresql://bibliflow_user:ci_password@postgres:5432/bibliflow_ci
+      DATABASE_URL: postgresql://biblioflow_user:ci_password@postgres:5432/biblioflow_dev
       JWT_SECRET: ci-test-secret
     # Pas de volumes en CI (code figé dans l'image)
     command: npm run start:prod
 
   frontend:
+    build:
+      target: dev
     environment:
       NODE_ENV: production
       API_URL: http://backend:3000/api/v1

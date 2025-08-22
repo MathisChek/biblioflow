@@ -2,8 +2,8 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_DB: ${DB_NAME:-bibliflow_dev}
-      POSTGRES_USER: ${DB_USER:-bibliflow_user}
+      POSTGRES_DB: ${DB_NAME:-biblioflow_dev}
+      POSTGRES_USER: ${DB_USER:-biblioflow_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-dev_password}
       POSTGRES_HOST_AUTH_METHOD: trust
     env_file:
@@ -17,7 +17,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U ${DB_USER:-bibliflow_user} -d ${DB_NAME:-bibliflow_dev}",
+          "pg_isready -U ${DB_USER:-biblioflow_user} -d ${DB_NAME:-biblioflow_dev}",
         ]
       interval: 5s
       timeout: 3s
@@ -27,18 +27,18 @@ services:
 
   backend:
     build:
-      context: ./bibliflow-backend
+      context: ./biblioflow-backend
       dockerfile: Dockerfile
-      target: development
+      target: dev
     environment:
       NODE_ENV: development
       PORT: 3000
-      DATABASE_URL: postgresql://${DB_USER:-bibliflow_user}:${DB_PASSWORD:-dev_password}@postgres:5432/${DB_NAME:-bibliflow_dev}
+      DATABASE_URL: postgresql://${DB_USER:-biblioflow_user}:${DB_PASSWORD:-dev_password}@postgres:5432/${DB_NAME:-biblioflow_dev}
       JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_in_production}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:4200,http://127.0.0.1:4200}
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
-      DEBUG: ${DEBUG:-bibliflow:*}
+      DEBUG: ${DEBUG:-biblioflow:*}
       LOG_LEVEL: ${LOG_LEVEL:-debug}
     env_file:
       - .env
@@ -54,9 +54,9 @@ services:
 
   frontend:
     build:
-      context: ./bibliflow-frontend
+      context: ./biblioflow-frontend
       dockerfile: Dockerfile
-      target: development
+      target: dev
     environment:
       API_URL: ${API_URL:-http://localhost:3000/api/v1}
       NODE_ENV: development
@@ -91,17 +91,17 @@ services:
     restart: on-failure
 
   sonarqube:
-    image: sonarqube:community
-    container_name: sonarqube
-    environment:
-      - SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
-    ports:
-      - "9000:9000"
-    volumes:
-      - sonarqube_data:/opt/sonarqube/data
-      - sonarqube_extensions:/opt/sonarqube/extensions
-    networks:
-      -  biblioflow_default
+      image: sonarqube:community
+      container_name: sonarqube
+      environment:
+        - SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
+      ports:
+        - "9000:9000"
+      volumes:
+        - sonarqube_data:/opt/sonarqube/data
+        - sonarqube_extensions:/opt/sonarqube/extensions
+      networks:
+        -  biblioflow_default
 
 networks:
   biblioflow_default:
